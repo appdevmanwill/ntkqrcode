@@ -1,0 +1,2 @@
+# ntkqrcode
+QR code generator
