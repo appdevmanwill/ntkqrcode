@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NTK QR Code Generator</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e2e8f0;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 20px;
+    padding: 32px;
+    max-width: 520px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .sub { color: #94a3b8; margin-bottom: 24px; font-size: 0.9rem; }
+  label { display: block; font-size: 0.85rem; font-weight: 600; margin: 16px 0 6px; color: #cbd5e1; }
+  input[type="text"], select {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(0,0,0,0.3);
+    color: #f1f5f9;
+    font-size: 1rem;
+    outline: none;
+  }
+  input[type="text"]:focus, select:focus { border-color: #38bdf8; }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  input[type="color"] { width: 100%; height: 42px; border: none; border-radius: 10px; background: transparent; cursor: pointer; }
+  .btn {
+    width: 100%;
+    margin-top: 20px;
+    padding: 13px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #38bdf8, #6366f1);
+    color: white;
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(56,189,248,0.4); }
+  .btn:active { transform: translateY(0); }
+  #qrcode-wrap {
+    margin-top: 24px;
+    display: none;
+    background: white;
+    border-radius: 14px;
+    padding: 16px;
+    text-align: center;
+  }
+  #qrcode-wrap.show { display: block; animation: pop 0.3s ease; }
+  @keyframes pop { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #qrcode img, #qrcode canvas { border-radius: 6px; max-width: 100%; }
+  .download { background: linear-gradient(90deg, #10b981, #059669); margin-top: 10px; }
+  #error { color: #f87171; font-size: 0.85rem; margin-top: 10px; display: none; }
+  footer { text-align: center; margin-top: 20px; font-size: 0.75rem; color: #64748b; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>&#128241; NTK QR Code Generator</h1>
+    <p class="sub">Free, fast, no ads &mdash; generate QR codes in seconds.</p>
+
+    <label for="text">Text or URL</label>
+    <input type="text" id="text" placeholder="https://example.com" autocomplete="off">
+
+    <div class="row">
+      <div>
+        <label for="size">Size</label>
+        <select id="size">
+          <option value="256">256 px</option>
+          <option value="512" selected>512 px</option>
+          <option value="1024">1024 px</option>
+        </select>
+      </div>
+      <div>
+        <label for="ec">Error correction</label>
+        <select id="ec">
+          <option value="L">L (Low)</option>
+          <option value="M" selected>M (Medium)</option>
+          <option value="Q">Q (Quartile)</option>
+          <option value="H">H (High)</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label for="fg">Foreground</label>
+        <input type="color" id="fg" value="#000000">
+      </div>
+      <div>
+        <label for="bg">Background</label>
+        <input type="color" id="bg" value="#ffffff">
+      </div>
+    </div>
+
+    <button class="btn" id="generate">Generate QR Code</button>
+
+    <div id="error"></div>
+    <div id="qrcode-wrap">
+      <div id="qrcode"></div>
+      <button class="btn download" id="download">&#11015; Download PNG</button>
+    </div>
+
+    <footer>NTK QR Code Generator &middot; GitHub Pages</footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+  <script>
+    const textInput = document.getElementById('text');
+    const sizeSelect = document.getElementById('size');
+    const ecSelect = document.getElementById('ec');
+    const fgInput = document.getElementById('fg');
+    const bgInput = document.getElementById('bg');
+    const qrWrap = document.getElementById('qrcode-wrap');
+    const qrBox = document.getElementById('qrcode');
+    const errorBox = document.getElementById('error');
+    const downloadBtn = document.getElementById('download');
+    let currentCanvas = null;
+
+    function generate() {
+      const value = textInput.value.trim();
+      errorBox.style.display = 'none';
+      if (!value) {
+        errorBox.textContent = 'Please enter some text or a URL first.';
+        errorBox.style.display = 'block';
+        return;
+      }
+      try {
+        const qr = qrcode(0, ecSelect.value);
+        qr.addData(value);
+        qr.make();
+        const size = parseInt(sizeSelect.value, 10);
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = bgInput.value;
+        ctx.fillRect(0, 0, size, size);
+        const cells = qr.getModuleCount();
+        const cellSize = size / cells;
+        ctx.fillStyle = fgInput.value;
+        for (let r = 0; r < cells; r++) {
+          for (let c = 0; c < cells; c++) {
+            if (qr.isDark(r, c)) {
+              ctx.fillRect(Math.floor(c * cellSize), Math.floor(r * cellSize), Math.ceil(cellSize), Math.ceil(cellSize));
+            }
+          }
+        }
+        qrBox.innerHTML = '';
+        qrBox.appendChild(canvas);
+        currentCanvas = canvas;
+        qrWrap.classList.add('show');
+      } catch (e) {
+        errorBox.textContent = 'Could not generate QR code. Try shorter text.';
+        errorBox.style.display = 'block';
+      }
+    }
+
+    downloadBtn.addEventListener('click', () => {
+      if (!currentCanvas) return;
+      const link = document.createElement('a');
+      link.download = 'qrcode.png';
+      link.href = currentCanvas.toDataURL('image/png');
+      link.click();
+    });
+
+    document.getElementById('generate').addEventListener('click', generate);
+    textInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') generate(); });
+    textInput.focus();
+  </script>
+</body>
+</html>
